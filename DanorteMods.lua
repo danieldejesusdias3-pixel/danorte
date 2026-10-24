@@ -41,7 +41,7 @@ local BG_DIM   = 0.45 -- 0 = foto forte | 1 = foto some
 
 -- Controle remoto (gerador > aba Controle Remoto): link RAW do paste com a config.
 -- Vazio = desligado. Manutencao, funcoes, abas, fotos e avisos passam a vir do gerador.
-local REMOTE_URL  = ""
+local REMOTE_URL  = "https://raw.githubusercontent.com/danieldejesusdias3-pixel/danorte/refs/heads/main/config.json"
 local function fixLink(u)
     u = (tostring(u or ""):gsub("^%s+", "")); u = (u:gsub("%s+$", ""))
     if u == "" then return u end
