@@ -1511,6 +1511,59 @@ local function removeObj(p)
     teamCache[p] = nil
 end
 
+-- ====================== MORTO? ======================
+-- Humanoid.Health nem sempre vale: muitos jogos guardam a vida/estado em atributo ou valor proprio.
+-- Aqui checa a vida do Humanoid e tambem atributos/valores com nome padrao (Dead, Alive, Knocked, Health...).
+local isDead
+do
+    local DEAD_TRUE  = {dead = true, isdead = true, died = true, knocked = true, isknocked = true,
+                        downed = true, isdowned = true, eliminated = true, iseliminated = true}
+    local DEAD_FALSE = {alive = true, isalive = true}
+    local HP_NAMES   = {health = true, hp = true, currenthealth = true, curhealth = true}
+    local cache = setmetatable({}, {__mode = "k"})
+
+    local function byValue(name, v)
+        local n = name:lower()
+        if type(v) == "boolean" then
+            return (v and DEAD_TRUE[n]) or (not v and DEAD_FALSE[n]) or false
+        elseif type(v) == "number" then
+            return (HP_NAMES[n] and v <= 0) or false
+        end
+        return false
+    end
+
+    local function scan(holder)
+        if not holder then return false end
+        local okA, attrs = pcall(holder.GetAttributes, holder)
+        if okA then
+            for name, v in pairs(attrs) do
+                if byValue(name, v) then return true end
+            end
+        end
+        for _, c in ipairs(holder:GetChildren()) do
+            if c:IsA("ValueBase") then
+                local okV, v = pcall(function() return c.Value end)
+                if okV and byValue(c.Name, v) then return true end
+            end
+        end
+        return false
+    end
+
+    isDead = function(p, char, hum)
+        if hum then
+            if hum.Health <= 0 then return true end
+            local okS, st = pcall(hum.GetState, hum)
+            if okS and st == Enum.HumanoidStateType.Dead then return true end
+        end
+        local now = os.clock()
+        local c = cache[p]
+        if c and c.char == char and now - c.t < 0.2 then return c.v end
+        local v = scan(char) or scan(p)
+        cache[p] = {t = now, v = v, char = char}
+        return v
+    end
+end
+
 local fovCircle
 
 local function espStep()
@@ -1528,7 +1581,7 @@ local function espStep()
             local hum  = char and char:FindFirstChildOfClass("Humanoid")
             local root = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
             local ok = (hum ~= nil and root ~= nil and isEnemy(p))
-            if ok and S.IgnoreDead and hum.Health <= 0 then ok = false end
+            if ok and S.IgnoreDead and isDead(p, char, hum) then ok = false end
 
             local pos, on = nil, false
             if ok then
@@ -1762,7 +1815,7 @@ local function getClosest(radius)
         if isEnemy(p) then
             local char = p.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 and hum:GetState() ~= Enum.HumanoidStateType.Dead then
+            if hum and not isDead(p, char, hum) then
                 local part, pos = zonePoint(char)
                 if part then
                     local v, vis = Camera:WorldToViewportPoint(pos)
@@ -1991,7 +2044,7 @@ local function nearestPlayer()
             local c = p.Character
             local h = c and c:FindFirstChildOfClass("Humanoid")
             local r = c and c:FindFirstChild("HumanoidRootPart")
-            if h and r and h.Health > 0 then
+            if h and r and not isDead(p, c, h) then
                 local d = (r.Position - me.Position).Magnitude
                 if d < bd then best, bd = p, d end
             end
